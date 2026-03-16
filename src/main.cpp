@@ -16,6 +16,7 @@
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
 #include <secrets.h>
+#include <cstring>
 
 // ----LCD CONFIGURATION ----
 
@@ -145,6 +146,7 @@ void startTimeForOut();
 
 bool has_interval_passed(unsigned long& previousTime, unsigned long interval);
 boolean TimePeriodIsOver(unsigned long& periodStartTime, unsigned long TimePeriod);
+bool clearDirectory(String dirPath);
 
 void BlinkHeartBeatLED(int IO_Pin, int BlinkPeriod);
 void flashLED(int duration_ms);
@@ -994,10 +996,13 @@ class TimeManager {
         } while (!rtc.begin());
       }
 
+      // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+
       if (rtc.begin()) {
         started_time = rtc.now();
       }
       verifyConnection();
+      
     }
 
     void verifyConnection() {
@@ -1059,8 +1064,8 @@ class Files {
 
   String fileSelected = "";
 
-  const char* posFile = "/pos.txt";
-  const char* fileName = "/fileName.txt";
+  String posFile = "/pos.txt";
+  String fileName = "/fileName.txt";
   int stepNumber = 0;
   volatile int AUX_STEPS_X = 0;
   volatile int AUX_STEPS_Y = 0;
@@ -1082,28 +1087,31 @@ class Files {
       Serial.println("Modo guardado: " + fileSelected);
       delay(1000);
       file.close();
+      fileSelected = "";
       Serial.println("Contenido del archivo guardado correctamente.");
     } else {
       Serial.println("¡Error al abrir el archivo!");
     }
   }
   String getNameFile() {
-    File file = SD.open(fileName);
+    File file = SD.open(fileName, FILE_READ);
     if (file) {
       while (file.available()) {
         fileSelected += (char)file.read();
       }
       file.close();
       Serial.println("Configuración leída correctamente.");
+      Serial.println("El modo seleccionado es: " + fileSelected);
       return fileSelected;
     } else {
       Serial.println("Archivo de configuración no encontrado. Usando valores predeterminados.");
+      return "";
     }
   }
 
 
-  void sendFileName(String fileName) {
-    fileSelected = fileName;
+  void sendFileName(String fileNameString) {
+    fileSelected = fileNameString;
   }
 
   void selectLastFile() {
@@ -1268,6 +1276,19 @@ class Files {
     Y[stepNumber] = y;
     MINUTOS[stepNumber] = minutos;
     SEGUNDOS[stepNumber] = segundos;
+  }
+
+  void cleanVariables(){
+    stepNumber = 0;
+
+    // Clean volatile arrays
+    memset((void*)X, 0, sizeof(X));
+    memset((void*)Y, 0, sizeof(Y));
+
+    // Clean regular arrays
+    memset(MINUTOS, 0, sizeof(MINUTOS));
+    memset(SEGUNDOS, 0, sizeof(SEGUNDOS));
+
   }
 
   void savePos(int AUX_STEPS_X, int AUX_STEPS_Y) {  //Guarda la posición x y de los motores
@@ -1536,6 +1557,9 @@ class Encoder {
   }
 };
 
+Encoder Encoders;
+
+
 class Values {
   public:
   int STEPSX, STEPSY;
@@ -1652,15 +1676,6 @@ class MotorMovement : public Values {
       }
     }
 
-
-    // if (!is_process_in_execution){
-    //   if (Time.everyCertainMinutes(5)){
-    //   // if (Time.isSpecificTime(23,2)){
-    //     ApiEndpoint.establishConnection();
-    //     BlinkHeartBeatLED(OnBoard_LED,500); // change blinking to a lower frequency indicating beeing connected
-    //     DataWriter.sendAllFilesInDirectory("/iot/daily");
-    //   }
-    // }
     FilesObject.savePos(AUX_STEPS_X, AUX_STEPS_Y);
   }
 };
@@ -1824,7 +1839,7 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
       lcd.print("  ");
 
       //impresión del tiempo total desde el inicio del ciclo
-      lcd.setCursor(10, 4);
+      lcd.setCursor(10, 3);
       lcd.print(dosDigitos(Tiempo_total.minutes()));
       lcd.print(":");
       lcd.print(dosDigitos(Tiempo_total.seconds()));
@@ -2153,6 +2168,9 @@ class LCDRunMode : public ILCDBaseNavigation {
     }
 };
 
+
+Files SD_Files;
+
 class LCDNewModeSteps : public ILCDBaseNavigation {
   private:
   public:
@@ -2179,6 +2197,9 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
   }
 
   void verifyScreenExit(Encoder& EncoderObject, Files& FilesObject) override {
+    LCDLineRefresh LCD_LRSaveModeYesNo;
+    std::vector<Asociacion> c6;
+
     aux_PUSH_B = EncoderObject.getPUSH_B();  //Obtine el valor
 
     if (autoScreenOut){
@@ -2186,17 +2207,55 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
     }
 
     while (aux_PUSH_B == 1) {
-      EncoderObject.setEncoderToZero();
-      aux = 0;
-      EncoderObject.sendPUSH_B(0);
-      aux_PUSH_B = 0;
-      currentOption = 0;
 
-      FilesObject.saveMode();
-      FilesObject.saveFileName();
-      lcd.clear();
+    c6 = {{0, "GUARDAR"},{1, "CANCELAR"}};                         
+    LCD_LRSaveModeYesNo.setAutoScreenOut(false);
+    LCD_LRSaveModeYesNo.initializeScreen(Encoders);
+    LCD_LRSaveModeYesNo.OptionNames(c6);  // Give class the option names
+    while(LCD_LRSaveModeYesNo.getScreenStatus()){
+      switch (LCD_LRSaveModeYesNo.OptionSelection){
+        case 0:
+          EncoderObject.setEncoderToZero();
+          aux = 0;
+          EncoderObject.sendPUSH_B(0);
+          aux_PUSH_B = 0;
+          currentOption = 0;
+
+          FilesObject.saveMode();
+          FilesObject.saveFileName();
+          FilesObject.cleanVariables();
+          stepNumber = 0;
+          
+          SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último archivo
+
+          lcd.clear();
+          LCD_LRSaveModeYesNo.returnToPreviousScreen(Encoders);
+
+          LCD_LRSaveModeYesNo.OptionSelection = -1;
+        break;
+        case 1:
+          EncoderObject.setEncoderToZero();
+          aux = 0;
+          EncoderObject.sendPUSH_B(0);
+          aux_PUSH_B = 0;
+          currentOption = 0;
+          
+          FilesObject.cleanVariables();
+          stepNumber = 0;
+
+          LCD_LRSaveModeYesNo.returnToPreviousScreen(Encoders);
+          LCD_LRSaveModeYesNo.OptionSelection = -1;
+        break;
+        default:
+          LCD_LRSaveModeYesNo.lineRefresh(Encoders);
+          LCD_LRSaveModeYesNo.obtainEncoderButtomStatus(Encoders);
+          LCD_LRSaveModeYesNo.verifyScreenExit(Encoders);
+
+      }
     }
   }
+  }
+
 };
 
 class LCDNewModeTime : public ILCDBaseNavigation {
@@ -2229,9 +2288,6 @@ class LCDNewModeTime : public ILCDBaseNavigation {
 
 void setup() {
   Serial.begin(115200);
-
-
-
   delay(1000);
 
   lcd.setBacklight(3);  // puerto P3 de PCF8574 como positivo
@@ -2289,6 +2345,14 @@ void setup() {
   // Serial.print("RTC: ");
   // Serial.println(is_rtc_connected ? "CONNECTED" : "DISCONNECTED");
   // Serial.println("-----------------------------");
+
+
+
+  // clearDirectory("/");
+  // clearDirectory("/modes");
+  // clearDirectory("/iot/saved");
+
+  // delay(10000);
 
   Serial.println("DIRECTORIO /iot/daily");
   root = SD.open("/iot/daily");
@@ -2356,9 +2420,6 @@ void setup() {
   Serial.println("=== END SETUP READ ===");
 }
 
-Encoder Encoders;
-
-
 void loop() {
   //Names of the options
   std::vector<Asociacion> c1;
@@ -2379,8 +2440,6 @@ void loop() {
   LCDNewModeSteps LCD_NewModeSteps;
   LCDNewModeTime LCD_NewModeTime;
 
-
-  Files SD_Files;
   MotorMovement Motors;
 
 
@@ -2505,7 +2564,7 @@ void loop() {
                           SD_Files.saveStep(Motors.getPOS_A(), Motors.getPOS_B(), Encoders.getPOS_A(), Encoders.getPOS_B(), LCD_NewModeSteps.stepNumber);
                           LCD_NewModeTime.returnToPreviousScreen(Encoders);
                           Motors.restoreData(Encoders);
-                          LCD_NewModeSteps .stepNumber += 1;
+                          LCD_NewModeSteps.stepNumber += 1;
                           break;
                         default:
                           LCD_NewModeTime.Refresh(Encoders);
@@ -3040,3 +3099,39 @@ void flashLED(int duration_ms = 30) {
     digitalWrite(OnBoard_LED, LOW);
 }
 
+
+
+bool clearDirectory(String dirPath) {
+
+  File dir = SD.open(dirPath);
+
+  if (!dir) {
+    Serial.println("Error: no se pudo abrir el directorio.");
+    return false;
+  }
+
+  if (!dir.isDirectory()) {
+    Serial.println("Error: la ruta no es un directorio.");
+    dir.close();
+    return false;
+  }
+
+  File file = dir.openNextFile();
+
+  while (file) {
+    String filePath = String(dirPath) + "/" + String(file.name());
+
+    file.close();  // cerrar antes de borrar
+
+    if (SD.remove(filePath)) {
+      Serial.println("Archivo eliminado: " + filePath);
+    } else {
+      Serial.println("No se pudo eliminar: " + filePath);
+    }
+
+    file = dir.openNextFile();
+  }
+
+  dir.close();
+  return true;
+}
