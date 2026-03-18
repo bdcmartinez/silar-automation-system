@@ -20,6 +20,7 @@
 
 // ----LCD CONFIGURATION ----
 
+// Shared hardware peripherals: LCD for UI feedback and RTC for timestamps.
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // DIR, E, RW, RS, D4, D5, D6, D7
 
 // ----LCD CONFIGURATION ----
@@ -31,6 +32,7 @@ const int sd_chip_select = 5;  // Pin CS para la tarjeta SD
 
 //Counter of steps in a routine
 //Steps of the routine
+// Routine buffers loaded from SD: each index stores one movement step and its dwell time.
 volatile int X[20];
 volatile int Y[20];
 int MINUTOS[40];
@@ -153,6 +155,7 @@ void flashLED(int duration_ms);
 
 
 
+// Handles Wi-Fi discovery, credential persistence on SD, authentication, and batch uploads.
 class APIEndPoint {
   public:
     std::vector<Asociacion> networks;
@@ -387,6 +390,7 @@ class APIEndPoint {
 
     }
 
+    // Sends one JSON batch to the ingest API using the JWT acquired during login.
     bool sendDataToEndpoint(JsonDocument& doc) {
 
       verifyConnection();
@@ -437,6 +441,7 @@ class APIEndPoint {
 
 
 
+    // Performs API login and extracts the access token needed for later uploads.
     String loginAndGetToken(const String& url, const String& email, const String& password) {
       WiFiClientSecure client;
       client.setInsecure();  // para pruebas
@@ -495,6 +500,7 @@ class APIEndPoint {
 
 
 
+// Owns SD logging for driver telemetry and the logic that uploads stored CSV batches.
 class SaveSensorData {
   public:
     String file_name;
@@ -543,6 +549,7 @@ class SaveSensorData {
       }
     }
 
+    // Authenticates once, then iterates through pending files and uploads each one in batches.
     void sendAllFilesInDirectory(const char* dirPath) {
       bool file_success;
       int number_loading_file = 0;
@@ -665,6 +672,7 @@ class SaveSensorData {
 
 
 
+    // Streams one CSV/text file from SD into multiple API payloads of size BATCH_SIZE.
     bool sendFileInBatches(String filePath) {
 
 
@@ -967,6 +975,7 @@ class SaveSensorData {
 
 
 
+// Wraps RTC availability checks and exposes higher-level time-based triggers.
 class TimeManager {
   public:
     int current_day = -1;
@@ -1053,6 +1062,7 @@ TimeManager Time2;
 File root;
 
 
+// Manages mode files on SD, persisted motor positions, and the in-memory step arrays.
 class Files {
   private:
     int num_archivos = 0;
@@ -1202,6 +1212,7 @@ class Files {
   int getstepNumber() {
     return stepNumber;
   }
+  // Loads one saved mode file from SD into the global X/Y/time arrays used during execution.
   void processData(String nombreArchivo) {
 
     if (!SD.exists(generalPathToSaveModes)) {
@@ -1314,6 +1325,7 @@ class Files {
   }
 
 
+  // Serializes the current in-memory routine into a timestamped file under /modes.
   void saveMode() {
     DateTime inicio = rtc.now();
     fileSelected = getStringName(inicio) + ".txt";
@@ -1364,6 +1376,7 @@ class Files {
   }
 };
 
+// Centralizes rotary encoder/button state, debouncing, and movement counters used by the UI.
 class Encoder {
   private:
     unsigned long ultimoTiempo = 0;
@@ -1465,6 +1478,7 @@ class Encoder {
     return AUX_POS_A;
   }
 
+  // Interrupt handler body for encoder A: updates X-axis menu position and jog distance.
   void encoder1() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1485,6 +1499,7 @@ class Encoder {
       ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
     }
   }
+  // Interrupt handler body for encoder B: updates Y-axis menu position and jog distance.
   void encoder2() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1574,6 +1589,7 @@ class Values {
 
 
 
+// Converts UI-selected positions into step pulses and keeps SD position tracking in sync.
 class MotorMovement : public Values {
   private:
   public:
@@ -1626,6 +1642,7 @@ class MotorMovement : public Values {
     }
   }
 
+  // Drives both axes from the last persisted position toward the requested target step counts.
   void moveFromTo(Files& FilesObject, int AUX_STEPS_X, int AUX_STEPS_Y, int STEPSX, int STEPSY) {
     //Movimiento de motores y
 
@@ -1682,6 +1699,7 @@ class MotorMovement : public Values {
 
 //------Classes refer to LCD options------
 
+// Base class for all LCD screens: tracks selection state and shared navigation behavior.
 class ILCDBaseNavigation {
   public:
   volatile int POS_A;      // variable POS_A con valor inicial de 50 y definida
@@ -1805,6 +1823,7 @@ class ILCDBaseNavigation {
   }
 };
 
+// Runtime status screen shown while a saved routine is executing.
 class LCDRefreshRunMode : public ILCDBaseNavigation {
   private:
   public:
@@ -1864,6 +1883,7 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
   }
 };
 
+// Generic list renderer for paginated LCD menus backed by Asociacion items.
 class LCDLineRefresh : public ILCDBaseNavigation {
   private:
   public:
@@ -2007,6 +2027,7 @@ class LCDLineRefresh : public ILCDBaseNavigation {
 
 
 
+// Home screen extends the list renderer and adds the current RTC time on the last row.
 class LCDInitialMenu : public LCDLineRefresh {
   public:
     void Refresh(Encoder& EncoderObject) override {
@@ -2021,6 +2042,7 @@ class LCDInitialMenu : public LCDLineRefresh {
     }
 };
 
+// Character-by-character password entry screen used when storing Wi-Fi credentials.
 class LCDsetPassword : public ILCDBaseNavigation{
   public:
     int numeroElementos = charsetSize;
@@ -2141,6 +2163,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
      
 };
 
+// Screen that asks the operator how many layers of the selected routine to execute.
 class LCDRunMode : public ILCDBaseNavigation {
   private:
   public:
@@ -2171,6 +2194,7 @@ class LCDRunMode : public ILCDBaseNavigation {
 
 Files SD_Files;
 
+// Screen used to capture a new routine step by step by jogging both axes.
 class LCDNewModeSteps : public ILCDBaseNavigation {
   private:
   public:
@@ -2258,6 +2282,7 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
 
 };
 
+// Companion screen for defining the dwell time of each newly recorded step.
 class LCDNewModeTime : public ILCDBaseNavigation {
   public:
   int POS_A;
@@ -2286,6 +2311,7 @@ class LCDNewModeTime : public ILCDBaseNavigation {
 
 
 
+// Arduino setup initializes peripherals, validates storage/time hardware, and configures motor drivers.
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -2420,6 +2446,7 @@ void setup() {
   Serial.println("=== END SETUP READ ===");
 }
 
+// Main UI state machine: renders menus, reacts to encoder input, runs routines, and edits settings.
 void loop() {
   //Names of the options
   std::vector<Asociacion> c1;
@@ -2741,6 +2768,7 @@ void push_b() {
   Encoders.push_b();
 }
 
+// Captures a CSV row with telemetry from the Y-axis stepper driver.
 void printDriverYInfo(const char* tag) {
   String logRow = "";
 
@@ -2875,6 +2903,7 @@ void printDriverYInfo(const char* tag) {
   DataWriter.write(logRow);
 }
 
+// Captures a CSV row with telemetry from the X-axis stepper driver.
 void printDriverXInfo(const char* tag) {
   String logRow = "";
 
@@ -3030,6 +3059,7 @@ void printCurrentTime() {
 }
 
 
+// Utility for recursively dumping SD directory contents to the serial console during setup/debug.
 void printDirectory(File dir, int numTabs) {
   while (true) {
     File entry = dir.openNextFile();
@@ -3054,6 +3084,7 @@ void printDirectory(File dir, int numTabs) {
 
 
 
+// Maps the encoder index to the currently highlighted password character.
 char printCurrentCharacter(int currentIndex) {
   return charset[currentIndex];
 }
@@ -3101,6 +3132,7 @@ void flashLED(int duration_ms = 30) {
 
 
 
+// Debug helper that deletes all files directly inside a given SD directory.
 bool clearDirectory(String dirPath) {
 
   File dir = SD.open(dirPath);
