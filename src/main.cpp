@@ -20,7 +20,7 @@
 #include <secrets.h>
 #include <cstring>
 
-#define FIRMWARE_VERSION "2.0.0"
+#define FIRMWARE_VERSION "2.0.1"
 
 // ----LCD CONFIGURATION ----
 
@@ -1862,7 +1862,7 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
 
   void inter() {
     lcd.setCursor(1, 0);
-    lcd.print("*PROCESO EN CURSO*");
+    lcd.print("*CORRER PASOS*");
     lcd.setCursor(1, 1);
     lcd.print("PASO: ");
 
@@ -2454,12 +2454,7 @@ void setup() {
   DataWriter.establishConnection();
   Time.establishConnection();
 
-  // OTA check on boot: load saved WiFi credentials, connect, then check for update
-  if (ApiEndpoint.loadLastValidCredentials()) {
-    if (ApiEndpoint.establishConnection(network, password)) {
-      checkForOTAUpdate();
-    }
-  }
+
 
   // Serial.println("----- CONNECTION STATUS -----");
   // Serial.print("WiFi: ");
@@ -2575,7 +2570,7 @@ void loop() {
   //alueRefresh valueRefresh(0);
   //ILCDBaseNavigation* LCD_RunMode = &valueRefresh;
 
-  c1 = { { 0, "CORRER PROCESO" }, { 1, "CONFIGURACION" } };
+  c1 = { { 0, "CORRER ARRIBA" }, { 1, "CONFIGURACION" } };
   LCD_StartMenu.OptionNames(c1);
   LCD_StartMenu.setAutoScreenOut(false);
   LCD_StartMenu.initializeScreen(Encoders);
@@ -2636,7 +2631,7 @@ void loop() {
         LCD_LRSettings.setAutoScreenOut(true);
         LCD_LRSettings.initializeScreen(Encoders);
         while (LCD_LRSettings.getScreenStatus()) {
-          c2 = { { 0, "CAMBIAR MODO" }, { 1, "MODO NUEVO" }, { 2, "ENVIAR INFO" }, { 3, "MODIFICAR RED" } };
+          c2 = { { 0, "CAMBIAR MODO" }, { 1, "MODO NUEVO" }, { 2, "ENVIAR INFO" }, { 3, "MODIFICAR RED" }, {4, "ACTUALIZAR COD"} };
           switch (LCD_LRSettings.OptionSelection) {
             case 0:
               LCD_LRChangeMode.setAutoScreenOut(true);
@@ -2825,6 +2820,18 @@ void loop() {
               LCD_LRSettings.currentOption = 0;
             
             break;
+
+            case 4:
+              // OTA check on boot: load saved WiFi credentials, connect, then check for update
+              if (ApiEndpoint.loadLastValidCredentials()) {
+                if (ApiEndpoint.establishConnection(network, password)) {
+                  checkForOTAUpdate();
+                }
+              }
+              LCD_LRSettings.OptionSelection = -1;
+              LCD_LRSettings.currentOption = 0;
+            
+              break;
 
             default:
 
