@@ -15,12 +15,15 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
+#include <HTTPUpdate.h>
+#include <esp_ota_ops.h>
 #include <secrets.h>
 #include <cstring>
 
+#define FIRMWARE_VERSION "2.0.0"
+
 // ----LCD CONFIGURATION ----
 
-// Shared hardware peripherals: LCD for UI feedback and RTC for timestamps.
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // DIR, E, RW, RS, D4, D5, D6, D7
 
 // ----LCD CONFIGURATION ----
@@ -32,7 +35,6 @@ const int sd_chip_select = 5;  // Pin CS para la tarjeta SD
 
 //Counter of steps in a routine
 //Steps of the routine
-// Routine buffers loaded from SD: each index stores one movement step and its dwell time.
 volatile int X[20];
 volatile int Y[20];
 int MINUTOS[40];
@@ -155,7 +157,6 @@ void flashLED(int duration_ms);
 
 
 
-// Handles Wi-Fi discovery, credential persistence on SD, authentication, and batch uploads.
 class APIEndPoint {
   public:
     std::vector<Asociacion> networks;
@@ -219,9 +220,11 @@ class APIEndPoint {
         lcd.print(network);
         lcd.print("#");
         delay(2000);
+        is_wifi_connected = true;
 
         return true;
       }else{
+        is_wifi_connected = false;
         return false;
       }
     }
@@ -390,7 +393,6 @@ class APIEndPoint {
 
     }
 
-    // Sends one JSON batch to the ingest API using the JWT acquired during login.
     bool sendDataToEndpoint(JsonDocument& doc) {
 
       verifyConnection();
@@ -441,7 +443,6 @@ class APIEndPoint {
 
 
 
-    // Performs API login and extracts the access token needed for later uploads.
     String loginAndGetToken(const String& url, const String& email, const String& password) {
       WiFiClientSecure client;
       client.setInsecure();  // para pruebas
@@ -549,7 +550,6 @@ class SaveSensorData {
       }
     }
 
-    // Authenticates once, then iterates through pending files and uploads each one in batches.
     void sendAllFilesInDirectory(const char* dirPath) {
       bool file_success;
       int number_loading_file = 0;
@@ -672,7 +672,6 @@ class SaveSensorData {
 
 
 
-    // Streams one CSV/text file from SD into multiple API payloads of size BATCH_SIZE.
     bool sendFileInBatches(String filePath) {
 
 
@@ -1212,7 +1211,6 @@ class Files {
   int getstepNumber() {
     return stepNumber;
   }
-  // Loads one saved mode file from SD into the global X/Y/time arrays used during execution.
   void processData(String nombreArchivo) {
 
     if (!SD.exists(generalPathToSaveModes)) {
@@ -1325,7 +1323,6 @@ class Files {
   }
 
 
-  // Serializes the current in-memory routine into a timestamped file under /modes.
   void saveMode() {
     DateTime inicio = rtc.now();
     fileSelected = getStringName(inicio) + ".txt";
@@ -1478,7 +1475,6 @@ class Encoder {
     return AUX_POS_A;
   }
 
-  // Interrupt handler body for encoder A: updates X-axis menu position and jog distance.
   void encoder1() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1499,7 +1495,6 @@ class Encoder {
       ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
     }
   }
-  // Interrupt handler body for encoder B: updates Y-axis menu position and jog distance.
   void encoder2() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1589,7 +1584,6 @@ class Values {
 
 
 
-// Converts UI-selected positions into step pulses and keeps SD position tracking in sync.
 class MotorMovement : public Values {
   private:
   public:
@@ -1883,7 +1877,6 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
   }
 };
 
-// Generic list renderer for paginated LCD menus backed by Asociacion items.
 class LCDLineRefresh : public ILCDBaseNavigation {
   private:
   public:
@@ -2163,7 +2156,6 @@ class LCDsetPassword : public ILCDBaseNavigation{
      
 };
 
-// Screen that asks the operator how many layers of the selected routine to execute.
 class LCDRunMode : public ILCDBaseNavigation {
   private:
   public:
@@ -2194,7 +2186,6 @@ class LCDRunMode : public ILCDBaseNavigation {
 
 Files SD_Files;
 
-// Screen used to capture a new routine step by step by jogging both axes.
 class LCDNewModeSteps : public ILCDBaseNavigation {
   private:
   public:
@@ -2282,7 +2273,6 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
 
 };
 
-// Companion screen for defining the dwell time of each newly recorded step.
 class LCDNewModeTime : public ILCDBaseNavigation {
   public:
   int POS_A;
@@ -2310,8 +2300,109 @@ class LCDNewModeTime : public ILCDBaseNavigation {
 //------Classes refer to LCD options------
 
 
+void checkForOTAUpdate() {
+  if (!is_wifi_connected) {
+    Serial.println("OTA skipped: no WiFi");
+    return;
+  }
 
-// Arduino setup initializes peripherals, validates storage/time hardware, and configures motor drivers.
+  Serial.println("Checking for OTA update...");
+  lcd.clear();
+  lcd.setCursor(2, 1);
+  lcd.print("Checking updates");
+
+  WiFiClientSecure manifestClient;
+  manifestClient.setInsecure();
+
+  HTTPClient http;
+  http.begin(manifestClient, OTA_MANIFEST_URL);
+  http.setTimeout(10000);
+  int httpCode = http.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("OTA manifest fetch failed: %d\n", httpCode);
+    http.end();
+    return;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload)) {
+    Serial.println("OTA manifest parse failed");
+    return;
+  }
+
+  const char* remoteVersion = doc["version"];
+  const char* firmwareUrl   = doc["url"];
+
+  if (!remoteVersion || !firmwareUrl) {
+    Serial.println("Invalid OTA manifest fields");
+    return;
+  }
+
+  if (strcmp(remoteVersion, FIRMWARE_VERSION) <= 0) {
+    Serial.printf("Firmware up to date: v%s\n", FIRMWARE_VERSION);
+    lcd.clear();
+    lcd.setCursor(4, 1);
+    lcd.print("Firmware OK");
+    lcd.setCursor(5, 2);
+    lcd.print("v");
+    lcd.print(FIRMWARE_VERSION);
+    delay(2000);
+    return;
+  }
+
+  Serial.printf("Update available: v%s -> v%s\n", FIRMWARE_VERSION, remoteVersion);
+  lcd.clear();
+  lcd.setCursor(1, 0);
+  lcd.print("Update available!");
+  lcd.setCursor(0, 1);
+  lcd.print("v");
+  lcd.print(FIRMWARE_VERSION);
+  lcd.print(" -> v");
+  lcd.print(remoteVersion);
+  lcd.setCursor(2, 2);
+  lcd.print("Downloading...");
+  delay(1500);
+
+  WiFiClientSecure updateClient;
+  updateClient.setInsecure();
+
+  httpUpdate.onProgress([](int current, int total) {
+    if (total > 0) {
+      int percent = (current * 100) / total;
+      lcd.setCursor(0, 3);
+      lcd.print("Progress: ");
+      lcd.print(percent);
+      lcd.print("%   ");
+    }
+  });
+
+  t_httpUpdate_return ret = httpUpdate.update(updateClient, String(firmwareUrl));
+
+  switch (ret) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("OTA failed (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+      lcd.clear();
+      lcd.setCursor(2, 1);
+      lcd.print("Update FAILED");
+      lcd.setCursor(0, 2);
+      lcd.print(httpUpdate.getLastErrorString().substring(0, 20));
+      delay(3000);
+      esp_ota_mark_app_invalid_rollback_and_reboot();
+      break;
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("OTA: no update found");
+      break;
+    case HTTP_UPDATE_OK:
+      // device reboots automatically after successful flash
+      break;
+  }
+}
+
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -2341,27 +2432,30 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CLK_A), encoder1, FALLING);   // interrupcion sobre pin A con
   attachInterrupt(digitalPinToInterrupt(CLK_B), encoder2, FALLING);   // interrupcion sobre pin A con
 
-  if (!rtc.begin()) {
+  while(!rtc.begin()) {
     Serial.println("¡Modulo RTC no encontrado!");
-    while (1)
-      ;
   }
-  if (!SD.begin(sd_chip_select)) {
+  while (!SD.begin(sd_chip_select)) {
     Serial.println("La inicialización de la tarjeta SD falló. Verifique la tarjeta SD en el ESP32 o Arduino.");
     //Impresión del paso en el que va
     lcd.setCursor(1, 1);
     lcd.print("SD card not found!");
     lcd.setCursor(1, 2);
     lcd.print("connect and restart");
-
-    while (1)
-      ;
+    
   }
 
   // --------API CONFIGURATION--------
 
   DataWriter.establishConnection();
   Time.establishConnection();
+
+  // OTA check on boot: load saved WiFi credentials, connect, then check for update
+  if (ApiEndpoint.loadLastValidCredentials()) {
+    if (ApiEndpoint.establishConnection(network, password)) {
+      checkForOTAUpdate();
+    }
+  }
 
   // Serial.println("----- CONNECTION STATUS -----");
   // Serial.print("WiFi: ");
@@ -2444,9 +2538,11 @@ void setup() {
   Serial.println(driver2.cs_actual());
 
   Serial.println("=== END SETUP READ ===");
+
+  // Mark current firmware as valid so bootloader won't rollback on next reset
+  esp_ota_mark_app_valid_cancel_rollback();
 }
 
-// Main UI state machine: renders menus, reacts to encoder input, runs routines, and edits settings.
 void loop() {
   //Names of the options
   std::vector<Asociacion> c1;
@@ -2768,7 +2864,6 @@ void push_b() {
   Encoders.push_b();
 }
 
-// Captures a CSV row with telemetry from the Y-axis stepper driver.
 void printDriverYInfo(const char* tag) {
   String logRow = "";
 
@@ -2903,7 +2998,6 @@ void printDriverYInfo(const char* tag) {
   DataWriter.write(logRow);
 }
 
-// Captures a CSV row with telemetry from the X-axis stepper driver.
 void printDriverXInfo(const char* tag) {
   String logRow = "";
 
