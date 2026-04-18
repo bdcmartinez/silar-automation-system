@@ -2351,6 +2351,7 @@ void checkForOTAUpdate() {
     lcd.print("v");
     lcd.print(FIRMWARE_VERSION);
     delay(2000);
+    lcd.clear();
     return;
   }
 
@@ -2441,9 +2442,9 @@ void setup() {
     lcd.setCursor(1, 1);
     lcd.print("SD card not found!");
     lcd.setCursor(1, 2);
-    lcd.print("connect and restart");
-    
+    lcd.print("connect and restart"); 
   }
+  lcd.clear();
 
   // --------API CONFIGURATION--------
 
@@ -2571,7 +2572,7 @@ void loop() {
   //alueRefresh valueRefresh(0);
   //ILCDBaseNavigation* LCD_RunMode = &valueRefresh;
 
-  c1 = { { 0, "CORRER PASOS" }, { 1, "CONFIGURACION" } };
+  c1 = { { 0, "CORRER PROCESO" }, { 1, "CONFIGURACION" } };
   LCD_StartMenu.OptionNames(c1);
   LCD_StartMenu.setAutoScreenOut(false);
   LCD_StartMenu.initializeScreen(Encoders);
