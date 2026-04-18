@@ -16,9 +16,11 @@
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
 #include <secrets.h>
+#include <cstring>
 
 // ----LCD CONFIGURATION ----
 
+// Shared hardware peripherals: LCD for UI feedback and RTC for timestamps.
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // DIR, E, RW, RS, D4, D5, D6, D7
 
 // ----LCD CONFIGURATION ----
@@ -30,6 +32,7 @@ const int sd_chip_select = 5;  // Pin CS para la tarjeta SD
 
 //Counter of steps in a routine
 //Steps of the routine
+// Routine buffers loaded from SD: each index stores one movement step and its dwell time.
 volatile int X[20];
 volatile int Y[20];
 int MINUTOS[40];
@@ -145,12 +148,14 @@ void startTimeForOut();
 
 bool has_interval_passed(unsigned long& previousTime, unsigned long interval);
 boolean TimePeriodIsOver(unsigned long& periodStartTime, unsigned long TimePeriod);
+bool clearDirectory(String dirPath);
 
 void BlinkHeartBeatLED(int IO_Pin, int BlinkPeriod);
 void flashLED(int duration_ms);
 
 
 
+// Handles Wi-Fi discovery, credential persistence on SD, authentication, and batch uploads.
 class APIEndPoint {
   public:
     std::vector<Asociacion> networks;
@@ -385,6 +390,7 @@ class APIEndPoint {
 
     }
 
+    // Sends one JSON batch to the ingest API using the JWT acquired during login.
     bool sendDataToEndpoint(JsonDocument& doc) {
 
       verifyConnection();
@@ -435,6 +441,7 @@ class APIEndPoint {
 
 
 
+    // Performs API login and extracts the access token needed for later uploads.
     String loginAndGetToken(const String& url, const String& email, const String& password) {
       WiFiClientSecure client;
       client.setInsecure();  // para pruebas
@@ -493,6 +500,7 @@ class APIEndPoint {
 
 
 
+// Owns SD logging for driver telemetry and the logic that uploads stored CSV batches.
 class SaveSensorData {
   public:
     String file_name;
@@ -541,6 +549,7 @@ class SaveSensorData {
       }
     }
 
+    // Authenticates once, then iterates through pending files and uploads each one in batches.
     void sendAllFilesInDirectory(const char* dirPath) {
       bool file_success;
       int number_loading_file = 0;
@@ -663,6 +672,7 @@ class SaveSensorData {
 
 
 
+    // Streams one CSV/text file from SD into multiple API payloads of size BATCH_SIZE.
     bool sendFileInBatches(String filePath) {
 
 
@@ -965,6 +975,7 @@ class SaveSensorData {
 
 
 
+// Wraps RTC availability checks and exposes higher-level time-based triggers.
 class TimeManager {
   public:
     int current_day = -1;
@@ -994,10 +1005,13 @@ class TimeManager {
         } while (!rtc.begin());
       }
 
+      // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+
       if (rtc.begin()) {
         started_time = rtc.now();
       }
       verifyConnection();
+      
     }
 
     void verifyConnection() {
@@ -1048,6 +1062,7 @@ TimeManager Time2;
 File root;
 
 
+// Manages mode files on SD, persisted motor positions, and the in-memory step arrays.
 class Files {
   private:
     int num_archivos = 0;
@@ -1059,8 +1074,8 @@ class Files {
 
   String fileSelected = "";
 
-  const char* posFile = "/pos.txt";
-  const char* fileName = "/fileName.txt";
+  String posFile = "/pos.txt";
+  String fileName = "/fileName.txt";
   int stepNumber = 0;
   volatile int AUX_STEPS_X = 0;
   volatile int AUX_STEPS_Y = 0;
@@ -1082,28 +1097,31 @@ class Files {
       Serial.println("Modo guardado: " + fileSelected);
       delay(1000);
       file.close();
+      fileSelected = "";
       Serial.println("Contenido del archivo guardado correctamente.");
     } else {
       Serial.println("¡Error al abrir el archivo!");
     }
   }
   String getNameFile() {
-    File file = SD.open(fileName);
+    File file = SD.open(fileName, FILE_READ);
     if (file) {
       while (file.available()) {
         fileSelected += (char)file.read();
       }
       file.close();
       Serial.println("Configuración leída correctamente.");
+      Serial.println("El modo seleccionado es: " + fileSelected);
       return fileSelected;
     } else {
       Serial.println("Archivo de configuración no encontrado. Usando valores predeterminados.");
+      return "";
     }
   }
 
 
-  void sendFileName(String fileName) {
-    fileSelected = fileName;
+  void sendFileName(String fileNameString) {
+    fileSelected = fileNameString;
   }
 
   void selectLastFile() {
@@ -1194,6 +1212,7 @@ class Files {
   int getstepNumber() {
     return stepNumber;
   }
+  // Loads one saved mode file from SD into the global X/Y/time arrays used during execution.
   void processData(String nombreArchivo) {
 
     if (!SD.exists(generalPathToSaveModes)) {
@@ -1270,6 +1289,19 @@ class Files {
     SEGUNDOS[stepNumber] = segundos;
   }
 
+  void cleanVariables(){
+    stepNumber = 0;
+
+    // Clean volatile arrays
+    memset((void*)X, 0, sizeof(X));
+    memset((void*)Y, 0, sizeof(Y));
+
+    // Clean regular arrays
+    memset(MINUTOS, 0, sizeof(MINUTOS));
+    memset(SEGUNDOS, 0, sizeof(SEGUNDOS));
+
+  }
+
   void savePos(int AUX_STEPS_X, int AUX_STEPS_Y) {  //Guarda la posición x y de los motores
 
     // Abre el archivo en modo de lectura y escritura
@@ -1293,6 +1325,7 @@ class Files {
   }
 
 
+  // Serializes the current in-memory routine into a timestamped file under /modes.
   void saveMode() {
     DateTime inicio = rtc.now();
     fileSelected = getStringName(inicio) + ".txt";
@@ -1343,6 +1376,7 @@ class Files {
   }
 };
 
+// Centralizes rotary encoder/button state, debouncing, and movement counters used by the UI.
 class Encoder {
   private:
     unsigned long ultimoTiempo = 0;
@@ -1444,6 +1478,7 @@ class Encoder {
     return AUX_POS_A;
   }
 
+  // Interrupt handler body for encoder A: updates X-axis menu position and jog distance.
   void encoder1() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1464,6 +1499,7 @@ class Encoder {
       ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
     }
   }
+  // Interrupt handler body for encoder B: updates Y-axis menu position and jog distance.
   void encoder2() {
     static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
     unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -1536,6 +1572,9 @@ class Encoder {
   }
 };
 
+Encoder Encoders;
+
+
 class Values {
   public:
   int STEPSX, STEPSY;
@@ -1550,6 +1589,7 @@ class Values {
 
 
 
+// Converts UI-selected positions into step pulses and keeps SD position tracking in sync.
 class MotorMovement : public Values {
   private:
   public:
@@ -1602,6 +1642,7 @@ class MotorMovement : public Values {
     }
   }
 
+  // Drives both axes from the last persisted position toward the requested target step counts.
   void moveFromTo(Files& FilesObject, int AUX_STEPS_X, int AUX_STEPS_Y, int STEPSX, int STEPSY) {
     //Movimiento de motores y
 
@@ -1652,21 +1693,13 @@ class MotorMovement : public Values {
       }
     }
 
-
-    // if (!is_process_in_execution){
-    //   if (Time.everyCertainMinutes(5)){
-    //   // if (Time.isSpecificTime(23,2)){
-    //     ApiEndpoint.establishConnection();
-    //     BlinkHeartBeatLED(OnBoard_LED,500); // change blinking to a lower frequency indicating beeing connected
-    //     DataWriter.sendAllFilesInDirectory("/iot/daily");
-    //   }
-    // }
     FilesObject.savePos(AUX_STEPS_X, AUX_STEPS_Y);
   }
 };
 
 //------Classes refer to LCD options------
 
+// Base class for all LCD screens: tracks selection state and shared navigation behavior.
 class ILCDBaseNavigation {
   public:
   volatile int POS_A;      // variable POS_A con valor inicial de 50 y definida
@@ -1790,6 +1823,7 @@ class ILCDBaseNavigation {
   }
 };
 
+// Runtime status screen shown while a saved routine is executing.
 class LCDRefreshRunMode : public ILCDBaseNavigation {
   private:
   public:
@@ -1824,7 +1858,7 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
       lcd.print("  ");
 
       //impresión del tiempo total desde el inicio del ciclo
-      lcd.setCursor(10, 4);
+      lcd.setCursor(10, 3);
       lcd.print(dosDigitos(Tiempo_total.minutes()));
       lcd.print(":");
       lcd.print(dosDigitos(Tiempo_total.seconds()));
@@ -1849,6 +1883,7 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
   }
 };
 
+// Generic list renderer for paginated LCD menus backed by Asociacion items.
 class LCDLineRefresh : public ILCDBaseNavigation {
   private:
   public:
@@ -1992,6 +2027,7 @@ class LCDLineRefresh : public ILCDBaseNavigation {
 
 
 
+// Home screen extends the list renderer and adds the current RTC time on the last row.
 class LCDInitialMenu : public LCDLineRefresh {
   public:
     void Refresh(Encoder& EncoderObject) override {
@@ -2006,6 +2042,7 @@ class LCDInitialMenu : public LCDLineRefresh {
     }
 };
 
+// Character-by-character password entry screen used when storing Wi-Fi credentials.
 class LCDsetPassword : public ILCDBaseNavigation{
   public:
     int numeroElementos = charsetSize;
@@ -2126,6 +2163,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
      
 };
 
+// Screen that asks the operator how many layers of the selected routine to execute.
 class LCDRunMode : public ILCDBaseNavigation {
   private:
   public:
@@ -2153,6 +2191,10 @@ class LCDRunMode : public ILCDBaseNavigation {
     }
 };
 
+
+Files SD_Files;
+
+// Screen used to capture a new routine step by step by jogging both axes.
 class LCDNewModeSteps : public ILCDBaseNavigation {
   private:
   public:
@@ -2179,6 +2221,9 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
   }
 
   void verifyScreenExit(Encoder& EncoderObject, Files& FilesObject) override {
+    LCDLineRefresh LCD_LRSaveModeYesNo;
+    std::vector<Asociacion> c6;
+
     aux_PUSH_B = EncoderObject.getPUSH_B();  //Obtine el valor
 
     if (autoScreenOut){
@@ -2186,19 +2231,58 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
     }
 
     while (aux_PUSH_B == 1) {
-      EncoderObject.setEncoderToZero();
-      aux = 0;
-      EncoderObject.sendPUSH_B(0);
-      aux_PUSH_B = 0;
-      currentOption = 0;
 
-      FilesObject.saveMode();
-      FilesObject.saveFileName();
-      lcd.clear();
+    c6 = {{0, "GUARDAR"},{1, "CANCELAR"}};                         
+    LCD_LRSaveModeYesNo.setAutoScreenOut(false);
+    LCD_LRSaveModeYesNo.initializeScreen(Encoders);
+    LCD_LRSaveModeYesNo.OptionNames(c6);  // Give class the option names
+    while(LCD_LRSaveModeYesNo.getScreenStatus()){
+      switch (LCD_LRSaveModeYesNo.OptionSelection){
+        case 0:
+          EncoderObject.setEncoderToZero();
+          aux = 0;
+          EncoderObject.sendPUSH_B(0);
+          aux_PUSH_B = 0;
+          currentOption = 0;
+
+          FilesObject.saveMode();
+          FilesObject.saveFileName();
+          FilesObject.cleanVariables();
+          stepNumber = 0;
+          
+          SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último archivo
+
+          lcd.clear();
+          LCD_LRSaveModeYesNo.returnToPreviousScreen(Encoders);
+
+          LCD_LRSaveModeYesNo.OptionSelection = -1;
+        break;
+        case 1:
+          EncoderObject.setEncoderToZero();
+          aux = 0;
+          EncoderObject.sendPUSH_B(0);
+          aux_PUSH_B = 0;
+          currentOption = 0;
+          
+          FilesObject.cleanVariables();
+          stepNumber = 0;
+
+          LCD_LRSaveModeYesNo.returnToPreviousScreen(Encoders);
+          LCD_LRSaveModeYesNo.OptionSelection = -1;
+        break;
+        default:
+          LCD_LRSaveModeYesNo.lineRefresh(Encoders);
+          LCD_LRSaveModeYesNo.obtainEncoderButtomStatus(Encoders);
+          LCD_LRSaveModeYesNo.verifyScreenExit(Encoders);
+
+      }
     }
   }
+  }
+
 };
 
+// Companion screen for defining the dwell time of each newly recorded step.
 class LCDNewModeTime : public ILCDBaseNavigation {
   public:
   int POS_A;
@@ -2227,11 +2311,9 @@ class LCDNewModeTime : public ILCDBaseNavigation {
 
 
 
+// Arduino setup initializes peripherals, validates storage/time hardware, and configures motor drivers.
 void setup() {
   Serial.begin(115200);
-
-
-
   delay(1000);
 
   lcd.setBacklight(3);  // puerto P3 de PCF8574 como positivo
@@ -2289,6 +2371,14 @@ void setup() {
   // Serial.print("RTC: ");
   // Serial.println(is_rtc_connected ? "CONNECTED" : "DISCONNECTED");
   // Serial.println("-----------------------------");
+
+
+
+  // clearDirectory("/");
+  // clearDirectory("/modes");
+  // clearDirectory("/iot/saved");
+
+  // delay(10000);
 
   Serial.println("DIRECTORIO /iot/daily");
   root = SD.open("/iot/daily");
@@ -2356,9 +2446,7 @@ void setup() {
   Serial.println("=== END SETUP READ ===");
 }
 
-Encoder Encoders;
-
-
+// Main UI state machine: renders menus, reacts to encoder input, runs routines, and edits settings.
 void loop() {
   //Names of the options
   std::vector<Asociacion> c1;
@@ -2379,8 +2467,6 @@ void loop() {
   LCDNewModeSteps LCD_NewModeSteps;
   LCDNewModeTime LCD_NewModeTime;
 
-
-  Files SD_Files;
   MotorMovement Motors;
 
 
@@ -2505,7 +2591,7 @@ void loop() {
                           SD_Files.saveStep(Motors.getPOS_A(), Motors.getPOS_B(), Encoders.getPOS_A(), Encoders.getPOS_B(), LCD_NewModeSteps.stepNumber);
                           LCD_NewModeTime.returnToPreviousScreen(Encoders);
                           Motors.restoreData(Encoders);
-                          LCD_NewModeSteps .stepNumber += 1;
+                          LCD_NewModeSteps.stepNumber += 1;
                           break;
                         default:
                           LCD_NewModeTime.Refresh(Encoders);
@@ -2682,6 +2768,7 @@ void push_b() {
   Encoders.push_b();
 }
 
+// Captures a CSV row with telemetry from the Y-axis stepper driver.
 void printDriverYInfo(const char* tag) {
   String logRow = "";
 
@@ -2816,6 +2903,7 @@ void printDriverYInfo(const char* tag) {
   DataWriter.write(logRow);
 }
 
+// Captures a CSV row with telemetry from the X-axis stepper driver.
 void printDriverXInfo(const char* tag) {
   String logRow = "";
 
@@ -2971,6 +3059,7 @@ void printCurrentTime() {
 }
 
 
+// Utility for recursively dumping SD directory contents to the serial console during setup/debug.
 void printDirectory(File dir, int numTabs) {
   while (true) {
     File entry = dir.openNextFile();
@@ -2995,6 +3084,7 @@ void printDirectory(File dir, int numTabs) {
 
 
 
+// Maps the encoder index to the currently highlighted password character.
 char printCurrentCharacter(int currentIndex) {
   return charset[currentIndex];
 }
@@ -3040,3 +3130,40 @@ void flashLED(int duration_ms = 30) {
     digitalWrite(OnBoard_LED, LOW);
 }
 
+
+
+// Debug helper that deletes all files directly inside a given SD directory.
+bool clearDirectory(String dirPath) {
+
+  File dir = SD.open(dirPath);
+
+  if (!dir) {
+    Serial.println("Error: no se pudo abrir el directorio.");
+    return false;
+  }
+
+  if (!dir.isDirectory()) {
+    Serial.println("Error: la ruta no es un directorio.");
+    dir.close();
+    return false;
+  }
+
+  File file = dir.openNextFile();
+
+  while (file) {
+    String filePath = String(dirPath) + "/" + String(file.name());
+
+    file.close();  // cerrar antes de borrar
+
+    if (SD.remove(filePath)) {
+      Serial.println("Archivo eliminado: " + filePath);
+    } else {
+      Serial.println("No se pudo eliminar: " + filePath);
+    }
+
+    file = dir.openNextFile();
+  }
+
+  dir.close();
+  return true;
+}
