@@ -20,7 +20,7 @@
 #include <secrets.h>
 #include <cstring>
 
-#define FIRMWARE_VERSION "2.0.1"
+#define FIRMWARE_VERSION "2.0.2"
 
 // ----LCD CONFIGURATION ----
 
@@ -2570,7 +2570,7 @@ void loop() {
   //alueRefresh valueRefresh(0);
   //ILCDBaseNavigation* LCD_RunMode = &valueRefresh;
 
-  c1 = { { 0, "CORRER ARRIBA" }, { 1, "CONFIGURACION" } };
+  c1 = { { 0, "CORRER PROCESO" }, { 1, "CONFIGURACION" } };
   LCD_StartMenu.OptionNames(c1);
   LCD_StartMenu.setAutoScreenOut(false);
   LCD_StartMenu.initializeScreen(Encoders);
