@@ -2370,6 +2370,7 @@ void checkForOTAUpdate() {
 
   WiFiClientSecure updateClient;
   updateClient.setInsecure();
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   httpUpdate.onProgress([](int current, int total) {
     if (total > 0) {
@@ -2393,9 +2394,11 @@ void checkForOTAUpdate() {
       lcd.print(httpUpdate.getLastErrorString().substring(0, 20));
       delay(3000);
       esp_ota_mark_app_invalid_rollback_and_reboot();
+      lcd.clear();
       break;
     case HTTP_UPDATE_NO_UPDATES:
       Serial.println("OTA: no update found");
+      lcd.clear();
       break;
     case HTTP_UPDATE_OK:
       // device reboots automatically after successful flash
