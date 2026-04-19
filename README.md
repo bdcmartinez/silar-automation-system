@@ -1,6 +1,6 @@
 # Silar Automation System
 
-ESP32 firmware for a motorized XY positioning platform with a local LCD/encoder interface, cloud telemetry, and over-the-air updates.
+ESP32 firmware that automates the **SILAR** (Successive Ionic Layer Adsorption and Reaction) thin-film deposition process, driving a two-axis sample stage through programmed dip sequences with a local LCD/encoder interface, cloud telemetry, and over-the-air updates.
 
 ![firmware](https://img.shields.io/badge/firmware-2.0.3-blue)
 ![platform](https://img.shields.io/badge/platform-ESP32-informational)
@@ -9,7 +9,30 @@ ESP32 firmware for a motorized XY positioning platform with a local LCD/encoder 
 
 ## Overview
 
-Silar drives a two-axis sample stage built around an ESP32, two TMC2209 stepper drivers, a 20×4 LCD, and two rotary encoders. The operator programs movement sequences through the on-device Spanish-language menu; the controller logs runs to an SD card with RTC timestamps, batches the data, and uploads it to a cloud ingest endpoint over authenticated HTTPS. Firmware updates itself over the air from a GitHub-hosted manifest.
+The machine replaces the manual dipping workflow of SILAR with a repeatable, programmable XY stage. An ESP32 drives two TMC2209 stepper drivers to move a substrate holder between precursor and rinse beakers laid out on the work surface; a 20×4 LCD and two rotary encoders let the operator build and save the dip sequence. Every run is logged to an SD card with DS3231 timestamps and batched to a cloud ingest endpoint over authenticated HTTPS. Firmware updates itself over the air from a GitHub-hosted manifest.
+
+## The SILAR method
+
+SILAR is a low-cost, solution-based technique for depositing thin films one atomic/ionic layer at a time. A substrate is cycled through four stations in sequence:
+
+1. **Cation precursor** — the substrate dips into a solution containing the metal ion (e.g. `Cd²⁺`, `Zn²⁺`, `Cu²⁺`); ions adsorb onto the surface.
+2. **Rinse 1** — excess, weakly bound cations are washed off in deionized water.
+3. **Anion precursor** — the substrate dips into a solution containing the counter-ion (e.g. `S²⁻`, `OH⁻`, `Se²⁻`); it reacts with the adsorbed cation layer to form the target compound (CdS, ZnO, CuS, …).
+4. **Rinse 2** — unreacted species are washed off.
+
+One pass through the four beakers deposits a single layer. Film thickness is controlled by the **number of cycles**; stoichiometry and crystallinity are controlled by **dwell time**, **precursor concentration**, and **temperature**. The technique is used for semiconductor thin films (solar absorbers, buffer layers, transparent conductors, photocatalysts, gas-sensing layers) because it is cheap, scalable, and needs no vacuum.
+
+### How this machine helps
+
+Done by hand, SILAR is tedious and a significant source of run-to-run variability — a 100-cycle deposition is 400 manual dips timed with a stopwatch. This controller removes the human from the loop:
+
+- **Repeatable geometry** — the XY stage drives to saved `(x, y)` beaker positions with 400 steps/mm resolution, so the substrate lands in the same place every cycle.
+- **Programmable recipes** — up to 20 sequence steps per recipe with independent per-step `(MINUTOS, SEGUNDOS)` dwell times (`src/main.cpp:38-41`), and multiple recipes stored on the SD card (`CAMBIAR MODO` / `MODO NUEVO`).
+- **Deterministic timing** — dwell times are driven by the RTC rather than operator stopwatching, so adsorption/reaction windows are consistent across hundreds of cycles.
+- **Traceability** — each run is timestamped and logged; `ENVIAR INFO` batches the records to the cloud so process parameters can be correlated with downstream film characterization (XRD, UV-Vis, SEM).
+- **Unattended operation** — a long deposition (e.g. 150 cycles × 4 stations × ~30 s dwell ≈ 5 hours) runs without supervision, and `ACTUALIZAR COD` keeps the firmware current via OTA.
+
+In short: the mechanical rig provides the motion, this firmware provides the recipe engine, the logging, and the network plumbing that turn SILAR from a manual craft into a reproducible deposition process.
 
 ## Features
 
