@@ -20,7 +20,7 @@
 #include <secrets.h>
 #include <cstring>
 
-#define FIRMWARE_VERSION "2.0.2"
+#define FIRMWARE_VERSION "2.0.3"
 
 // ----LCD CONFIGURATION ----
 
@@ -1376,7 +1376,8 @@ class Files {
 // Centralizes rotary encoder/button state, debouncing, and movement counters used by the UI.
 class Encoder {
   private:
-    unsigned long ultimoTiempo = 0;
+    unsigned long ultimoTiempo_A = 0;
+    unsigned long ultimoTiempo_B = 0;
     unsigned long debounceDelay = 300;  // Tiempo de debounce en milisegundos
 
   public:
@@ -1522,29 +1523,18 @@ class Encoder {
   }
 
   void push_a() {
-    //Variable la cual hará que en determinado menú, nos regresemos al AUX_PRINT_A
-    if (millis() - ultimoTiempo > debounceDelay) {
-      // Actualiza el tiempo del último cambio del botón
-      ultimoTiempo = millis();
+    if (millis() - ultimoTiempo_B > debounceDelay) {
+      ultimoTiempo_B = millis();
       if (digitalRead(BUTTON_B) == LOW) {
-        Serial.println("FUNCIONA_B");
         PUSH_B = 1;
-
-        // Espera hasta que pase el intervalo
       }
     }
   }
 
-
-
-
   void push_b() {
-
-    if (millis() - ultimoTiempo > debounceDelay) {
-      // Actualiza el tiempo del último cambio del botón
-      ultimoTiempo = millis();
+    if (millis() - ultimoTiempo_A > debounceDelay) {
+      ultimoTiempo_A = millis();
       if (digitalRead(BUTTON_A) == LOW) {
-        Serial.println("FUNCIONA_A");
         PUSH_A = 1;
       }
     }
