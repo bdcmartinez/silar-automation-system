@@ -112,7 +112,7 @@ bool is_rtc_connected;
 
 File file;
 
-int BATCH_SIZE = 15;
+int BATCH_SIZE = 40;
 
 unsigned long MyTestTimer = 0;  // variables MUST be of type unsigned long
 const byte OnBoard_LED = 2;
@@ -164,6 +164,12 @@ class APIEndPoint {
     const char* fileName = "/network.txt";
     String networkSelected = "";
 
+  private:
+    WiFiClientSecure _client;  // reused across batches to avoid repeated TLS handshakes
+    HTTPClient _http;          // persistent HTTP client kept alive between requests
+    bool _httpInitialized = false;  // tracks whether _client and _http have been configured
+
+  public:
     APIEndPoint() {
     }
 
@@ -402,40 +408,28 @@ class APIEndPoint {
         return false;
       }
 
-      WiFiClientSecure client;
-      client.setInsecure();  // evita problemas con certificados
+      if (!_httpInitialized) {
+        _client.setInsecure();   // skip certificate verification (saves handshake time)
+        _http.setReuse(true);    // keep TCP connection alive between batches
+        _http.setTimeout(20000);
+        _httpInitialized = true;
+      }
 
-      HTTPClient http;
-
-      http.setTimeout(20000);
-      http.begin(client, INGEST_BATCH_URL);
-
-      http.addHeader("Content-Type", "application/json");
-      http.addHeader("Authorization", "Bearer " + jwtToken);
+      _http.begin(_client, INGEST_BATCH_URL);
+      _http.addHeader("Content-Type", "application/json");
+      _http.addHeader("Authorization", "Bearer " + jwtToken);
 
       String requestBody;
       serializeJson(doc, requestBody);
 
-      int httpResponseCode = http.POST(requestBody);
+      int httpResponseCode = _http.POST(requestBody);
+      _http.getString();  // drain response body to keep connection alive
 
       if (httpResponseCode >= 200 && httpResponseCode < 300) {
-
-        String response = http.getString();
-
         Serial.println("INFO | API RESPONSE: " + String(httpResponseCode));
-        Serial.println("INFO | BODY: " + response);
-
-        http.end();
         return true;
-
       } else {
-
-        String response = http.getString();
-
         Serial.println("ERROR | API RESPONSE: " + String(httpResponseCode));
-        Serial.println("ERROR | BODY: " + response);
-
-        http.end();
         return false;
       }
     }
