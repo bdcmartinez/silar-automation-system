@@ -7,7 +7,6 @@
 #include <vector>  // Libreria para declarar vectores
 #include <TMCStepper.h>
 #include <Arduino.h>
-#include <vector>  // Libreria para declarar vectores
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <iostream>
@@ -718,6 +717,7 @@ class SaveSensorData {
           if (!success) {
             delay(2000);
             Serial.println("ERROR | FAILED | Sending Batch " + String(seq) + " to API");
+            file.close();
             seq++;
             return 0;
             // continue;  // retry same seq
@@ -1517,19 +1517,19 @@ class Encoder {
   }
 
   void push_a() {
-    if (millis() - ultimoTiempo_B > debounceDelay) {
-      ultimoTiempo_B = millis();
-      if (digitalRead(BUTTON_B) == LOW) {
-        PUSH_B = 1;
+    if (millis() - ultimoTiempo_A > debounceDelay) {
+      ultimoTiempo_A = millis();
+      if (digitalRead(BUTTON_A) == LOW) {
+        PUSH_A = 1;
       }
     }
   }
 
   void push_b() {
-    if (millis() - ultimoTiempo_A > debounceDelay) {
-      ultimoTiempo_A = millis();
-      if (digitalRead(BUTTON_A) == LOW) {
-        PUSH_A = 1;
+    if (millis() - ultimoTiempo_B > debounceDelay) {
+      ultimoTiempo_B = millis();
+      if (digitalRead(BUTTON_B) == LOW) {
+        PUSH_B = 1;
       }
     }
   }
