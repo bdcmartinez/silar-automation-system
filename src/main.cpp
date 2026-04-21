@@ -20,7 +20,7 @@
 #include <secrets.h>
 #include <cstring>
 
-#define FIRMWARE_VERSION "2.0.3"
+#define FIRMWARE_VERSION "2.0.5"
 
 // ----LCD CONFIGURATION ----
 
