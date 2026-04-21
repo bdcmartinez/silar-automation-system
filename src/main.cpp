@@ -36,8 +36,8 @@ const int sd_chip_select = 5;  // Pin CS para la tarjeta SD
 //Steps of the routine
 volatile int X[20];
 volatile int Y[20];
-int MINUTOS[40];
-int SEGUNDOS[40];
+int MINUTES[40];
+int SECONDS[40];
 
 // Variables for encoders
 int CLK_A = 33;
@@ -103,7 +103,7 @@ String password;
 String folderNetwork = "/credentials";
 
 
-const char* nombreArchivo = "/pos.txt";
+const char* fileName = "/pos.txt";
 
 bool is_wifi_connected;
 bool is_sd_connected;
@@ -124,9 +124,9 @@ const byte OnBoard_LED = 2;
 const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:,.<>?/";
 const int charsetSize = 63;
 
-struct Asociacion {  //la estructura crea una relación entre cada nombre de archivo y un número
-  int identificador;
-  String nombreArchivo;
+struct Association {  // maps a number identifier to a file name
+  int identifier;
+  String fileName;
 };
 
 DateTime startTime;
@@ -158,8 +158,8 @@ void flashLED(int duration_ms);
 
 class APIEndPoint {
   public:
-    std::vector<Asociacion> networks;
-    std::vector<Asociacion> saveNetworks;
+    std::vector<Association> networks;
+    std::vector<Association> saveNetworks;
     const char* fileName = "/network.txt";
     String networkSelected = "";
 
@@ -256,7 +256,7 @@ class APIEndPoint {
       File credFile = SD.open(credentialPath, FILE_READ);
 
       if (!credFile) {
-        Serial.println("No se pudo abrir el archivo de credenciales de la red actual.");
+        Serial.println("No se pudo abrir el file de credenciales de la red actual.");
         return false;
       }
 
@@ -276,7 +276,7 @@ class APIEndPoint {
     }
 
     void saveNetworkAssociations() {
-      Asociacion aux;
+      Association aux;
       Serial.println("Redes guardadas:");
       
 
@@ -296,7 +296,7 @@ class APIEndPoint {
 
         String filename = file.name();
 
-        // ignorar el archivo que guarda la red actual
+        // ignorar el file que guarda la red actual
         if (filename != "current_network.txt") {
 
           // quitar la extensión .txt
@@ -348,37 +348,37 @@ class APIEndPoint {
         delay(2000);
         file.print(networkSelected);
         file.close();
-        Serial.println("Contenido del archivo guardado correctamente.");
+        Serial.println("Contenido del file guardado correctamente.");
       } else {
-        Serial.println("¡Error al abrir el archivo!");
+        Serial.println("¡Error al abrir el file!");
       }
     }
 
 
-    String getNetworkName(int identificador) {
+    String getNetworkName(int identifier) {
       for (const auto& network : networks) {
-        if (network.identificador == identificador) {
-          return network.nombreArchivo;
+        if (network.identifier == identifier) {
+          return network.fileName;
         }
       }
-      // Si no se encuentra ninguna asociación para el identificador dado
+      // Si no se encuentra ninguna asociación para el identifier dado
       return "";
     }
 
     void selectLastNetwork() {
-      // if (getNameFile() == "") {  //si no hay un archivo seleccionado, selecciona el último que se guardo
+      // if (getNameFile() == "") {  //si no hay un file seleccionado, selecciona el último que se guardo
       //   networkAssociations();
-      //   fileSelected = getNetworkName(num_archivos - 1);  // Del número de archivos contados se queda con el último
+      //   fileSelected = getNetworkName(numFiles - 1);  // Del número de files contados se queda con el último
 
       //   processData(fileSelected);
       // } else {                      //si hay un arhivo seleccionado, obtiene los datos de él
-      //   processData(fileSelected);  //recupera los datos del archivo seleccionado
+      //   processData(fileSelected);  //recupera los datos del file seleccionado
       // }
     }
 
     void networkAssociations() {
       int n = WiFi.scanNetworks();
-      Asociacion aux;
+      Association aux;
 
       Serial.println("scan done");
       if (n == 0) {
@@ -794,9 +794,9 @@ class SaveSensorData {
     }
 
     // initialize dir if not exist
-    void create(String glanularity) {
+    void create(String granularity) {
       DateTime current_time = rtc.now();
-      base_name = obtenerNombreArchivo(current_time, glanularity) + ".csv";
+      base_name = getFileName(current_time, granularity) + ".csv";
       file_name = main_dir + "/" + base_name;
 
 
@@ -842,9 +842,9 @@ class SaveSensorData {
       }
 
       if (SD.exists(file_name)) {
-        // Serial.println("Existe el archivo");
+        // Serial.println("Existe el file");
       } else {
-        // Serial.println("No existe el archivo");
+        // Serial.println("No existe el file");
       }
 
       myFile = SD.open(file_name, FILE_APPEND);
@@ -926,38 +926,38 @@ class SaveSensorData {
 
   private:
 
-  String obtenerNombreArchivo(DateTime fechaHora, String glanularity) {
-    String nombreArchivo = "";
-    // Construir el nombre del archivo usando los componentes de fecha y hora
-    nombreArchivo += String(fechaHora.year(), DEC);
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.month());
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.day());
-    nombreArchivo += "_";
+  String getFileName(DateTime dateTime, String granularity) {
+    String fileName = "";
+    // Construir el nombre del file usando los componentes de fecha y hora
+    fileName += String(dateTime.year(), DEC);
+    fileName += "-";
+    fileName += twoDigits(dateTime.month());
+    fileName += "-";
+    fileName += twoDigits(dateTime.day());
+    fileName += "_";
 
-    if (glanularity == "hour") {
-      nombreArchivo += dosDigitos(fechaHora.hour());
+    if (granularity == "hour") {
+      fileName += twoDigits(dateTime.hour());
     }
 
-    if (glanularity == "min") {
-      nombreArchivo += dosDigitos(fechaHora.hour());
-      nombreArchivo += "-";
-      nombreArchivo += dosDigitos(fechaHora.minute());
+    if (granularity == "min") {
+      fileName += twoDigits(dateTime.hour());
+      fileName += "-";
+      fileName += twoDigits(dateTime.minute());
     }
 
-    if (glanularity == "sec") {
-      nombreArchivo += dosDigitos(fechaHora.hour());
-      nombreArchivo += "-";
-      nombreArchivo += dosDigitos(fechaHora.minute());
-      nombreArchivo += "-";
-      nombreArchivo += dosDigitos(fechaHora.second());
+    if (granularity == "sec") {
+      fileName += twoDigits(dateTime.hour());
+      fileName += "-";
+      fileName += twoDigits(dateTime.minute());
+      fileName += "-";
+      fileName += twoDigits(dateTime.second());
     }
 
-    return nombreArchivo;
+    return fileName;
   }
 
-  String dosDigitos(int numero) {
+  String twoDigits(int numero) {
     if (numero < 10) {
       return "0" + String(numero);
     } else {
@@ -1051,19 +1051,18 @@ class TimeManager {
 APIEndPoint ApiEndpoint;
 SaveSensorData DataWriter;
 TimeManager Time;
-TimeManager Time2;
 File root;
 
 
 // Manages mode files on SD, persisted motor positions, and the in-memory step arrays.
 class Files {
   private:
-    int num_archivos = 0;
+    int numFiles = 0;
     String generalPathToSaveModes = "/modes";
 
   public:
 
-  std::vector<Asociacion> asociaciones;
+  std::vector<Association> associations;
 
   String fileSelected = "";
 
@@ -1091,9 +1090,9 @@ class Files {
       delay(1000);
       file.close();
       fileSelected = "";
-      Serial.println("Contenido del archivo guardado correctamente.");
+      Serial.println("Contenido del file guardado correctamente.");
     } else {
-      Serial.println("¡Error al abrir el archivo!");
+      Serial.println("¡Error al abrir el file!");
     }
   }
   String getNameFile() {
@@ -1118,155 +1117,155 @@ class Files {
   }
 
   void selectLastFile() {
-    if (getNameFile() == "") {  //si no hay un archivo seleccionado, selecciona el último que se guardo
+    if (getNameFile() == "") {  //si no hay un file seleccionado, selecciona el último que se guardo
       fileAssociations();
-      fileSelected = getFileName(num_archivos - 1);  // Del número de archivos contados se queda con el último
+      fileSelected = getFileName(numFiles - 1);  // Del número de files contados se queda con el último
 
       processData(fileSelected);
     } else {                      //si hay un arhivo seleccionado, obtiene los datos de él
-      processData(fileSelected);  //recupera los datos del archivo seleccionado
+      processData(fileSelected);  //recupera los datos del file seleccionado
     }
   }
 
   void fileAssociations() {
-    //se crea una relación de números 1-1 a los nombres de archivos de los programas
+    //se crea una relación de números 1-1 a los nombres de files de los programas
 
-    // Abrir el directorio raíz
-    File directorio = SD.open(generalPathToSaveModes);
+    // Abrir el directory raíz
+    File directory = SD.open(generalPathToSaveModes);
 
-    num_archivos = 0;
-    if (directorio) {
+    numFiles = 0;
+    if (directory) {
       while (true) {
-        // Abrir el siguiente archivo
-        File archivo = directorio.openNextFile();
-        Asociacion aux;
+        // Abrir el siguiente file
+        File file = directory.openNextFile();
+        Association aux;
 
-        // Si no hay más archivos, salir del bucle
-        if (!archivo) {
+        // Si no hay más files, salir del bucle
+        if (!file) {
           break;
         }
 
-        // Imprimir el nombre del archivo
-        //Serial.println(archivo.name());
+        // Imprimir el nombre del file
+        //Serial.println(file.name());
 
         // Agregar una nueva asociación al final del vector
-        aux = { num_archivos, archivo.name() };
-        asociaciones.insert(asociaciones.begin(), aux);
+        aux = { numFiles, file.name() };
+        associations.insert(associations.begin(), aux);
 
-        //asociaciones.push_back({num_archivos, archivo.name()});
+        //associations.push_back({numFiles, file.name()});
 
-        // Cerrar el archivo
-        archivo.close();
-        num_archivos = num_archivos + 1;
+        // Cerrar el file
+        file.close();
+        numFiles = numFiles + 1;
       }
 
-      // Cerrar el directorio
-      directorio.close();
+      // Cerrar el directory
+      directory.close();
 
-      // Iterar sobre las asociaciones y mostrarlas en la consola
-      //for (const auto& asociacion : asociaciones) {
-      //  lcd.setCursor(contador_1+1, 0);
-      //  lcd.print(asociacion.nombreArchivo);
+      // Iterar sobre las associations y mostrarlas en la consola
+      //for (const auto& asociacion : associations) {
+      //  lcd.setCursor(counter_1+1, 0);
+      //  lcd.print(asociacion.fileName);
       //}
     } else {
-      // Si no se puede abrir el directorio
-      Serial.println("Error al abrir el directorio raíz.");
+      // Si no se puede abrir el directory
+      Serial.println("Error al abrir el directory raíz.");
     }
   }
 
 
-  String getStringName(DateTime fechaHora) {
-    String nombreArchivo = "";
-    // Construir el nombre del archivo usando los componentes de fecha y hora
-    nombreArchivo += String(fechaHora.year(), DEC);
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.month());
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.day());
-    nombreArchivo += "_";
-    nombreArchivo += dosDigitos(fechaHora.hour());
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.minute());
-    nombreArchivo += "-";
-    nombreArchivo += dosDigitos(fechaHora.second());
+  String getStringName(DateTime dateTime) {
+    String fileName = "";
+    // Construir el nombre del file usando los componentes de fecha y hora
+    fileName += String(dateTime.year(), DEC);
+    fileName += "-";
+    fileName += twoDigits(dateTime.month());
+    fileName += "-";
+    fileName += twoDigits(dateTime.day());
+    fileName += "_";
+    fileName += twoDigits(dateTime.hour());
+    fileName += "-";
+    fileName += twoDigits(dateTime.minute());
+    fileName += "-";
+    fileName += twoDigits(dateTime.second());
 
-    return nombreArchivo;
+    return fileName;
   }
 
-  String getFileName(int identificador) {
-    for (const auto& asociacion : asociaciones) {
-      if (asociacion.identificador == identificador) {
-        return asociacion.nombreArchivo;
+  String getFileName(int identifier) {
+    for (const auto& asociacion : associations) {
+      if (asociacion.identifier == identifier) {
+        return asociacion.fileName;
       }
     }
-    // Si no se encuentra ninguna asociación para el identificador dado
+    // Si no se encuentra ninguna asociación para el identifier dado
     return "";
   }
   int getstepNumber() {
     return stepNumber;
   }
-  void processData(String nombreArchivo) {
+  void processData(String fileName) {
 
     if (!SD.exists(generalPathToSaveModes)) {
         SD.mkdir(generalPathToSaveModes);
     }
 
-    File archivo = SD.open(generalPathToSaveModes + "/" + nombreArchivo);
+    File file = SD.open(generalPathToSaveModes + "/" + fileName);
 
-    if (!archivo) {
-      Serial.println("Error al abrir el archivo.");
+    if (!file) {
+      Serial.println("Error al abrir el file.");
       return;
     }
 
-    Serial.println("Leyendo datos del archivo:");
+    Serial.println("Leyendo datos del file:");
 
-    // Leer cada línea del archivo
-    int contador = 0;
+    // Leer cada línea del file
+    int counter = 0;
     int aux = 0;
-    while (archivo.available()) {
-      String linea = archivo.readStringUntil('\n');  // Leer una línea del archivo
+    while (file.available()) {
+      String line = file.readStringUntil('\n');  // Leer una línea del file
       // Extraer los números de la línea
-      X[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
-      linea.remove(0, linea.indexOf(' ') + 1);  // Eliminar la parte ya leída de la línea
-      Y[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
-      linea.remove(0, linea.indexOf(' ') + 1);
-      MINUTOS[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
-      linea.remove(0, linea.indexOf(' ') + 1);
-      SEGUNDOS[contador] = linea.toInt();
+      X[counter] = line.substring(0, line.indexOf(' ')).toInt();
+      line.remove(0, line.indexOf(' ') + 1);  // Eliminar la parte ya leída de la línea
+      Y[counter] = line.substring(0, line.indexOf(' ')).toInt();
+      line.remove(0, line.indexOf(' ') + 1);
+      MINUTES[counter] = line.substring(0, line.indexOf(' ')).toInt();
+      line.remove(0, line.indexOf(' ') + 1);
+      SECONDS[counter] = line.toInt();
 
 
       /*
         // Imprimir los datos en la consola
         Serial.print("Columna 1: ");
-        Serial.print(X[contador]);
+        Serial.print(X[counter]);
         Serial.print(", Columna 2: ");
-        Serial.print(Y[contador]);
+        Serial.print(Y[counter]);
         Serial.print(", Columna 3: ");
-        Serial.print(MINUTOS[contador]);
+        Serial.print(MINUTES[counter]);
         Serial.print(", Columna 4: ");
-        Serial.println(SEGUNDOS[contador]);
+        Serial.println(SECONDS[counter]);
       */
-      if (X[contador] == 0 && Y[contador] == 0 && MINUTOS[contador] == 0 && SEGUNDOS[contador] == 0 && aux == 0) {
-        stepNumber = contador + 1;
+      if (X[counter] == 0 && Y[counter] == 0 && MINUTES[counter] == 0 && SECONDS[counter] == 0 && aux == 0) {
+        stepNumber = counter + 1;
         aux = 1;
       }
-      contador = contador + 1;
+      counter = counter + 1;
     }
 
-    archivo.close();  // Cerrar el archivo
+    file.close();  // Cerrar el file
   }
 
   void readPreviousSteps() {  //Lee la posición guardada x y de los motores
     Serial.println("Leyendo configuración desde la tarjeta SD...");
 
-    // Abre el archivo en modo de lectura
+    // Abre el file en modo de lectura
     File file = SD.open(posFile);
     if (file) {
-      // Lee las posiciones desde el archivo
+      // Lee las posiciones desde el file
       AUX_STEPS_X = file.parseInt();
       AUX_STEPS_Y = file.parseInt();
 
-      // Cierra el archivo
+      // Cierra el file
       file.close();
       Serial.println("Configuración leída correctamente.");
     } else {
@@ -1274,11 +1273,11 @@ class Files {
     }
   }
 
-  void saveStep(int x, int y, int minutos, int segundos, int stepNumber) {
+  void saveStep(int x, int y, int minutes, int seconds, int stepNumber) {
     X[stepNumber] = x;
     Y[stepNumber] = y;
-    MINUTOS[stepNumber] = minutos;
-    SEGUNDOS[stepNumber] = segundos;
+    MINUTES[stepNumber] = minutes;
+    SECONDS[stepNumber] = seconds;
   }
 
   void cleanVariables(){
@@ -1289,17 +1288,17 @@ class Files {
     memset((void*)Y, 0, sizeof(Y));
 
     // Clean regular arrays
-    memset(MINUTOS, 0, sizeof(MINUTOS));
-    memset(SEGUNDOS, 0, sizeof(SEGUNDOS));
+    memset(MINUTES, 0, sizeof(MINUTES));
+    memset(SECONDS, 0, sizeof(SECONDS));
 
   }
 
   void savePos(int AUX_STEPS_X, int AUX_STEPS_Y) {  //Guarda la posición x y de los motores
 
-    // Abre el archivo en modo de lectura y escritura
-    File file = SD.open(nombreArchivo, FILE_WRITE);
+    // Abre el file en modo de lectura y escritura
+    File file = SD.open(fileName, FILE_WRITE);
     if (file) {
-      // Posiciona el puntero de escritura al principio del archivo
+      // Posiciona el puntero de escritura al principio del file
       file.seek(0);
 
       // Sobrescribe los valores existentes
@@ -1307,19 +1306,19 @@ class Files {
       file.print('\n');
       file.print(AUX_STEPS_Y);
 
-      // Trunca el archivo para eliminar cualquier contenido adicional
-      // Cierra y vuelve a abrir el archivo en modo de escritura para truncar
+      // Trunca el file para eliminar cualquier contenido adicional
+      // Cierra y vuelve a abrir el file en modo de escritura para truncar
       file.close();
 
     } else {
-      Serial.println("Error al abrir el archivo para guardar configuración.");
+      Serial.println("Error al abrir el file para guardar configuración.");
     }
   }
 
 
   void saveMode() {
-    DateTime inicio = rtc.now();
-    fileSelected = getStringName(inicio) + ".txt";
+    DateTime start = rtc.now();
+    fileSelected = getStringName(start) + ".txt";
 
 
     //Verify folder existance
@@ -1327,27 +1326,27 @@ class Files {
         SD.mkdir(generalPathToSaveModes);
     }
 
-    // Abrir el archivo en modo escritura
-    File archivo = SD.open(generalPathToSaveModes + "/" + fileSelected, FILE_WRITE);
-    if (archivo) {
-      // Escribir cada elemento del arreglo en el archivo
+    // Abrir el file en modo escritura
+    File file = SD.open(generalPathToSaveModes + "/" + fileSelected, FILE_WRITE);
+    if (file) {
+      // Escribir cada elemento del arreglo en el file
       for (int i = 0; i < sizeof(X) / sizeof(X[0]); i++) {
-        archivo.print(X[i]);
-        archivo.print(' ');  // Nueva línea
-        archivo.print(Y[i]);
-        archivo.print(' ');  // Nueva línea
-        archivo.print(MINUTOS[i]);
-        archivo.print(' ');  // Nueva línea
-        archivo.print(SEGUNDOS[i]);
-        archivo.print('\n');  // Nueva línea
+        file.print(X[i]);
+        file.print(' ');  // Nueva línea
+        file.print(Y[i]);
+        file.print(' ');  // Nueva línea
+        file.print(MINUTES[i]);
+        file.print(' ');  // Nueva línea
+        file.print(SECONDS[i]);
+        file.print('\n');  // Nueva línea
       }
 
-      archivo.close();  // Cerrar el archivo
+      file.close();  // Cerrar el file
       lcd.clear();
       lcd.setCursor(2, 1);
       lcd.print("GUARDADO EXITOSO");
     } else {
-      // Si no se pudo abrir el archivo
+      // Si no se pudo abrir el file
       lcd.clear();
       lcd.setCursor(2, 1);
       lcd.print("ERROR AL GUARDAR.");
@@ -1358,7 +1357,7 @@ class Files {
   }
 
 
-  String dosDigitos(int numero) {
+  String twoDigits(int numero) {
     if (numero < 10) {
       return "0" + String(numero);
     } else {
@@ -1370,8 +1369,8 @@ class Files {
 // Centralizes rotary encoder/button state, debouncing, and movement counters used by the UI.
 class Encoder {
   private:
-    unsigned long ultimoTiempo_A = 0;
-    unsigned long ultimoTiempo_B = 0;
+    unsigned long lastTime_A = 0;
+    unsigned long lastTime_B = 0;
     unsigned long debounceDelay = 300;  // Tiempo de debounce en milisegundos
 
   public:
@@ -1471,10 +1470,10 @@ class Encoder {
   }
 
   void encoder1() {
-    static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
-    unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
+    static unsigned long lastInterrupt = 0;  // variable static con ultimo valor de // tiempo de interrupcion
+    unsigned long interruptTime = millis();  // variable almacena valor de func. millis
 
-    if (tiempoInterrupcion - ultimaInterrupcion > 5) {  // rutina antirebote desestima  // pulsos menores a 5 mseg.
+    if (interruptTime - lastInterrupt > 5) {  // rutina antirebote desestima  // pulsos menores a 5 mseg.
       if (digitalRead(DT_A) == HIGH)                    // si B es HIGH, sentido horario
       {
         POS_A++;  // incrementa POS_A en 1
@@ -1487,14 +1486,14 @@ class Encoder {
       POS_A = min(limit_POS_A, max(0, POS_A));
       STEPSX = min(15000, max(0, STEPSX));  // establece limite inferior de 0 y
 
-      ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
+      lastInterrupt = interruptTime;  // guarda valor actualizado del tiempo
     }
   }
   void encoder2() {
-    static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
-    unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
+    static unsigned long lastInterrupt = 0;  // variable static con ultimo valor de // tiempo de interrupcion
+    unsigned long interruptTime = millis();  // variable almacena valor de func. millis
 
-    if (tiempoInterrupcion - ultimaInterrupcion > 5) {  // rutina antirebote desestima // pulsos menores a 5 mseg.
+    if (interruptTime - lastInterrupt > 5) {  // rutina antirebote desestima // pulsos menores a 5 mseg.
       if (digitalRead(DT_B) == HIGH)                    // si B es HIGH, sentido horario
       {
         POS_B++;  // incrementa POS_A en 1
@@ -1510,15 +1509,15 @@ class Encoder {
 
       //savesteps();
       // superior de 100 para POS_A
-      ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
+      lastInterrupt = interruptTime;  // guarda valor actualizado del tiempo
 
 
     }  // de la interrupcion en variable static
   }
 
   void push_a() {
-    if (millis() - ultimoTiempo_A > debounceDelay) {
-      ultimoTiempo_A = millis();
+    if (millis() - lastTime_A > debounceDelay) {
+      lastTime_A = millis();
       if (digitalRead(BUTTON_A) == LOW) {
         PUSH_A = 1;
       }
@@ -1526,8 +1525,8 @@ class Encoder {
   }
 
   void push_b() {
-    if (millis() - ultimoTiempo_B > debounceDelay) {
-      ultimoTiempo_B = millis();
+    if (millis() - lastTime_B > debounceDelay) {
+      lastTime_B = millis();
       if (digitalRead(BUTTON_B) == LOW) {
         PUSH_B = 1;
       }
@@ -1785,7 +1784,7 @@ class ILCDBaseNavigation {
     }
   }
 
-  String dosDigitos(int numero) {
+  String twoDigits(int numero) {
     if (numero < 10) {
       return "0" + String(numero);
     } else {
@@ -1805,20 +1804,20 @@ class ILCDBaseNavigation {
 class LCDRefreshRunMode : public ILCDBaseNavigation {
   private:
   public:
-  DateTime fecha;
+  DateTime date;
   //LCDRefreshRunMode(int option_number) : ILCDBaseNavigation(option_number) {}
 
   void startClock() {
-    fecha = rtc.now();  // Momento en que comienza el período
+    date = rtc.now();  // records the moment the process period begins
   }
   void Refresh(int i, int j) override {
 
-    DateTime inicio = rtc.now();                                      // Momento en que comienza el período
-    DateTime fin = inicio + TimeSpan(0, 0, MINUTOS[j], SEGUNDOS[j]);  // Calcula el momento en que terminará el período
+    DateTime start = rtc.now();
+    DateTime fin = start + TimeSpan(0, 0, MINUTES[j], SECONDS[j]);
     while (rtc.now() <= fin) {
-      DateTime ahora = rtc.now();
-      TimeSpan Transcurrido = ahora - inicio;
-      TimeSpan Tiempo_total = ahora - fecha;
+      DateTime now = rtc.now();
+      TimeSpan elapsed = now - start;
+      TimeSpan totalTime = now - date;
 
       //Impresión del paso en el que va
       lcd.setCursor(7, 1);
@@ -1830,16 +1829,16 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
 
       //impresión del tiempo del paso
       lcd.setCursor(9, 2);
-      lcd.print(dosDigitos(Transcurrido.minutes()));  // funcion millis() / 1000 para segundos transcurridos
+      lcd.print(twoDigits(elapsed.minutes()));  // funcion millis() / 1000 para segundos transcurridos
       lcd.print(":");
-      lcd.print(dosDigitos(Transcurrido.seconds()));  // funcion millis() / 1000 para segundos transcurridos
+      lcd.print(twoDigits(elapsed.seconds()));  // funcion millis() / 1000 para segundos transcurridos
       lcd.print("  ");
 
       //impresión del tiempo total desde el inicio del ciclo
       lcd.setCursor(10, 3);
-      lcd.print(dosDigitos(Tiempo_total.minutes()));
+      lcd.print(twoDigits(totalTime.minutes()));
       lcd.print(":");
-      lcd.print(dosDigitos(Tiempo_total.seconds()));
+      lcd.print(twoDigits(totalTime.seconds()));
       lcd.print("  ");
     }
   }
@@ -1864,17 +1863,17 @@ class LCDRefreshRunMode : public ILCDBaseNavigation {
 class LCDLineRefresh : public ILCDBaseNavigation {
   private:
   public:
-    std::vector<Asociacion> palabras;
+    std::vector<Association> words;
     int currentPage = 0;
     int auxiliar;
-    int numeroElementos;
+    int numElements;
     std::size_t variable;
     
     //Esta función inserta el listado de opciones
-    void OptionNames(const std::vector<Asociacion>& lista_palabras) {
-        palabras = lista_palabras;
-        variable = palabras.size();
-        numeroElementos = static_cast<int>(variable);
+    void OptionNames(const std::vector<Association>& wordList) {
+        words = wordList;
+        variable = words.size();
+        numElements = static_cast<int>(variable);
     }
 
     void lineRefresh(Encoder& EncoderObject) {
@@ -1906,22 +1905,22 @@ class LCDLineRefresh : public ILCDBaseNavigation {
       //Serial.println(POS_A);
 
 
-      int contador = 0;
-      int total_pages = numeroElementos / 4;
+      int counter = 0;
+      int total_pages = numElements / 4;
       int limit = currentPage * 4 + 4;
 
-      for (int i = currentPage * 4; i < min(limit, numeroElementos); i++) {
-        lcd.setCursor(1, contador);
-        lcd.print(palabras[i].nombreArchivo.substring(0, 16));
-        contador = contador + 1;
-        if (contador > 4) {
-          contador = 0;
+      for (int i = currentPage * 4; i < min(limit, numElements); i++) {
+        lcd.setCursor(1, counter);
+        lcd.print(words[i].fileName.substring(0, 16));
+        counter = counter + 1;
+        if (counter > 4) {
+          counter = 0;
         }
       }
 
-      if (numeroElementos > 4) {
+      if (numElements > 4) {
         if (currentPage == total_pages) {
-          if (numeroElementos % 4 == 0) {
+          if (numElements % 4 == 0) {
             auxiliar = 4;
           } else if (POS_A % 4 == 1){
             auxiliar = 1;
@@ -1934,14 +1933,14 @@ class LCDLineRefresh : public ILCDBaseNavigation {
         } else {
           auxiliar = 4;
         }
-      } else if (numeroElementos <= 4) {
-        auxiliar = numeroElementos;
+      } else if (numElements <= 4) {
+        auxiliar = numElements;
       }
 
       Serial.println(POS_A);
 
       //Establece la cota superior de POS_A
-      EncoderObject.savelimit_POS_A(numeroElementos * 5);
+      EncoderObject.savelimit_POS_A(numElements * 5);
 
       if (currentOption % 4 == 0){
             lcd.setCursor(0, 0);
@@ -2008,28 +2007,28 @@ class LCDLineRefresh : public ILCDBaseNavigation {
 class LCDInitialMenu : public LCDLineRefresh {
   public:
     void Refresh(Encoder& EncoderObject) override {
-      DateTime fecha = rtc.now();
-      lcd.setCursor(0, 3);  // ubica cursor en columna 0 y linea 1
+      DateTime now = rtc.now();
+      lcd.setCursor(0, 3);
       lcd.print("HORA: ");
-      lcd.print(dosDigitos(fecha.hour()));  // funcion millis() / 1000 para segundos transcurridos
+      lcd.print(twoDigits(now.hour()));
       lcd.print(":");
-      lcd.print(dosDigitos(fecha.minute()));  // funcion millis() / 1000 para segundos transcurridos
+      lcd.print(twoDigits(now.minute()));
       lcd.print(":");
-      lcd.print(dosDigitos(fecha.second()));  // funcion millis() / 1000 para segundos transcurridos
+      lcd.print(twoDigits(now.second()));
     }
 };
 
 // Character-by-character password entry screen used when storing Wi-Fi credentials.
 class LCDsetPassword : public ILCDBaseNavigation{
   public:
-    int numeroElementos = charsetSize;
+    int numElements = charsetSize;
     int currentPage = 0;
     int auxiliar;
     String password = "";
 
     void lineRefresh(Encoder& EncoderObject) {
       char caracter;
-      EncoderObject.savelimit_POS_A(numeroElementos);
+      EncoderObject.savelimit_POS_A(numElements);
       
       POS_A = EncoderObject.getPOS_A();
       caracter = printCurrentCharacter(POS_A);
@@ -2063,7 +2062,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
 
       String path = folderNetwork + "/current_network.txt";
 
-      SD.remove(path);   // elimina archivo anterior
+      SD.remove(path);   // elimina file anterior
 
       File file = SD.open(path, FILE_WRITE);
 
@@ -2089,7 +2088,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
       File file = SD.open(path, FILE_READ);
 
       if (!file) {
-        Serial.println("No se pudo abrir el archivo de la red.");
+        Serial.println("No se pudo abrir el file de la red.");
         return "";
       }
 
@@ -2120,7 +2119,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
 
         String path = folderNetwork + "/" + network + ".txt";
 
-        // Mejor abrir en FILE_WRITE pero recreando el archivo si ya existía
+        // Mejor abrir en FILE_WRITE pero recreando el file si ya existía
         SD.remove(path);  
         File file = SD.open(path, FILE_WRITE);
 
@@ -2133,7 +2132,7 @@ class LCDsetPassword : public ILCDBaseNavigation{
 
           Serial.println("Credenciales guardadas correctamente.");
         } else {
-          Serial.println("Error al abrir el archivo para guardar credenciales.");
+          Serial.println("Error al abrir el file para guardar credenciales.");
         }
       }
     }
@@ -2197,7 +2196,7 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
 
   void verifyScreenExit(Encoder& EncoderObject, Files& FilesObject) override {
     LCDLineRefresh LCD_LRSaveModeYesNo;
-    std::vector<Asociacion> c6;
+    std::vector<Association> c6;
 
     aux_PUSH_B = EncoderObject.getPUSH_B();  //Obtine el valor
 
@@ -2225,7 +2224,7 @@ class LCDNewModeSteps : public ILCDBaseNavigation {
           FilesObject.cleanVariables();
           stepNumber = 0;
           
-          SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último archivo
+          SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último file
 
           lcd.clear();
           LCD_LRSaveModeYesNo.returnToPreviousScreen(Encoders);
@@ -2271,11 +2270,11 @@ class LCDNewModeTime : public ILCDBaseNavigation {
 
 
     lcd.setCursor(1, 2);
-    lcd.print("MINUTOS: ");
+    lcd.print("MINUTES: ");
     lcd.print(POS_A);
     lcd.print("  ");
     lcd.setCursor(1, 3);
-    lcd.print("SEGUNDOS: ");
+    lcd.print("SECONDS: ");
     lcd.print(POS_B);
     lcd.print("  ");
   }
@@ -2396,7 +2395,7 @@ void setup() {
   delay(1000);
 
   lcd.setBacklight(3);  // puerto P3 de PCF8574 como positivo
-  lcd.init(21, 22);                  // 16 columnas por 2 lineas para LCD 1602A
+  lcd.init(21, 22);                  // 16 columnas por 2 lines para LCD 1602A
 	lcd.backlight();
   lcd.clear();
 
@@ -2528,9 +2527,9 @@ void setup() {
 
 void loop() {
   //Names of the options
-  std::vector<Asociacion> c1;
-  std::vector<Asociacion> c2;
-  std::vector<Asociacion> c5;
+  std::vector<Association> c1;
+  std::vector<Association> c2;
+  std::vector<Association> c5;
 
   LCDLineRefresh LCD_LRSettings;
   LCDLineRefresh LCD_LRChangeMode;
@@ -2577,7 +2576,7 @@ void loop() {
                 LCD_RefreshRunMode.inter();
                 LCD_RefreshRunMode.startClock();  //Empieza a medir el tiempo inicial del proceso
 
-                SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último archivo
+                SD_Files.selectLastFile();  //Hace lo necesario para recopilar los datos del último file
 
                 for (int i = 0; i < LCD_RunMode.getlayerNumber(); i++) {
                   for (int j = 0; j < SD_Files.getstepNumber()-1; j++) {
@@ -2621,11 +2620,11 @@ void loop() {
               LCD_LRChangeMode.setAutoScreenOut(true);
               LCD_LRChangeMode.initializeScreen(Encoders);
               SD_Files.fileAssociations();                          // Extract modes from memory
-              LCD_LRChangeMode.OptionNames(SD_Files.asociaciones);  // Give class the option names
+              LCD_LRChangeMode.OptionNames(SD_Files.associations);  // Give class the option names
               while (LCD_LRChangeMode.getScreenStatus()) {
                 switch (LCD_LRChangeMode.OptionSelection) {
                   case 0:
-                    SD_Files.sendFileName(SD_Files.asociaciones[LCD_LRChangeMode.currentOption].nombreArchivo);
+                    SD_Files.sendFileName(SD_Files.associations[LCD_LRChangeMode.currentOption].fileName);
                     SD_Files.saveFileName();
                     LCD_LRChangeMode.OptionSelection = -1;
                     // LCD_LRChangeMode.currentOption = 0;
@@ -2732,8 +2731,8 @@ void loop() {
                   while(LCD_LRChangeSaveNetwork.getScreenStatus()){
                     switch(LCD_LRChangeSaveNetwork.OptionSelection){
                       case 0:
-                        LCD_SetPassword.saveSelectedNetwork(ApiEndpoint.saveNetworks[LCD_LRChangeSaveNetwork.currentOption].nombreArchivo);
-                        LCD_SetPassword.saveSelectedPassword(LCD_SetPassword.getPasswordByNetwork(ApiEndpoint.saveNetworks[LCD_LRChangeSaveNetwork.currentOption].nombreArchivo));
+                        LCD_SetPassword.saveSelectedNetwork(ApiEndpoint.saveNetworks[LCD_LRChangeSaveNetwork.currentOption].fileName);
+                        LCD_SetPassword.saveSelectedPassword(LCD_SetPassword.getPasswordByNetwork(ApiEndpoint.saveNetworks[LCD_LRChangeSaveNetwork.currentOption].fileName));
                         LCD_SetPassword.saveCredentials();
                         LCD_LRChangeSaveNetwork.OptionSelection = -1;
                       break;
@@ -2760,7 +2759,7 @@ void loop() {
                         case 0:
                           LCD_SetPassword.setAutoScreenOut(false);
                           LCD_SetPassword.initializeScreen(Encoders);
-                          LCD_SetPassword.saveSelectedNetwork(ApiEndpoint.networks[LCD_LRChangeNetwork.currentOption].nombreArchivo);
+                          LCD_SetPassword.saveSelectedNetwork(ApiEndpoint.networks[LCD_LRChangeNetwork.currentOption].fileName);
                           while(LCD_SetPassword.getScreenStatus()){
                             switch(LCD_SetPassword.OptionSelection){
                               case 0:
@@ -2774,7 +2773,7 @@ void loop() {
                             }
                           }
                           LCD_SetPassword.saveCredentials();
-                          // ApiEndpoint.sendNetworkName(ApiEndpoint.networks[LCD_LRChangeNetwork.currentOption].nombreArchivo);
+                          // ApiEndpoint.sendNetworkName(ApiEndpoint.networks[LCD_LRChangeNetwork.currentOption].fileName);
                           // ApiEndpoint.saveNetworkName();
                           LCD_LRChangeNetwork.OptionSelection = -1;
                         break;
@@ -3178,7 +3177,7 @@ char printCurrentCharacter(int currentIndex) {
   return charset[currentIndex];
 }
 
-// Vector que contiene las asociaciones entre identificadores y nombres de archivo
+// Vector que contiene las associations entre identifieres y nombres de file
 
 void startTimeForOut() {
   startTime = rtc.now();  // Momento en que comienza el período
@@ -3227,12 +3226,12 @@ bool clearDirectory(String dirPath) {
   File dir = SD.open(dirPath);
 
   if (!dir) {
-    Serial.println("Error: no se pudo abrir el directorio.");
+    Serial.println("Error: no se pudo abrir el directory.");
     return false;
   }
 
   if (!dir.isDirectory()) {
-    Serial.println("Error: la ruta no es un directorio.");
+    Serial.println("Error: la ruta no es un directory.");
     dir.close();
     return false;
   }
