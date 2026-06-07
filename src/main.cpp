@@ -20,7 +20,7 @@
 #include <secrets.h>
 #include <cstring>
 
-#define FIRMWARE_VERSION "2.0.5"
+#define FIRMWARE_VERSION "2.0.6"
 
 // ----LCD CONFIGURATION ----
 
@@ -1629,11 +1629,11 @@ class MotorMovement : public Values {
       stepMotor_y(GENERAL_STEP_Y, 150);
       AUX_STEPS_Y += GENERAL_STEP_Y;
 
-      if (is_process_in_execution) {
-        DataWriter.create("hour");
-        printDriverYInfo("Driver 1 Info");
-        DataWriter.close();
-      }
+      // if (is_process_in_execution) {
+      //   DataWriter.create("hour");
+      //   printDriverYInfo("Driver 1 Info");
+      //   DataWriter.close();
+      // }
     }
 
     while (AUX_STEPS_Y > STEPSY) {
@@ -1641,22 +1641,22 @@ class MotorMovement : public Values {
       stepMotor_y(GENERAL_STEP_Y, 150);
       AUX_STEPS_Y -= GENERAL_STEP_Y;
 
-      if (is_process_in_execution) {
-        DataWriter.create("hour");
-        printDriverYInfo("Driver 1 Info");
-        DataWriter.close();
-      }
+      // if (is_process_in_execution) {
+      //   DataWriter.create("hour");
+      //   printDriverYInfo("Driver 1 Info");
+      //   DataWriter.close();
+      // }
     }
     while (AUX_STEPS_X < STEPSX) {
       digitalWrite(DIRX, HIGH);
       stepMotor_x(GENERAL_STEP_X, 150);
       AUX_STEPS_X += GENERAL_STEP_X;
 
-      if (is_process_in_execution) {
-        DataWriter.create("hour");
-        printDriverXInfo("Driver 2 Info");
-        DataWriter.close();
-      }
+      // if (is_process_in_execution) {
+      //   DataWriter.create("hour");
+      //   printDriverXInfo("Driver 2 Info");
+      //   DataWriter.close();
+      // }
     }
 
     while (AUX_STEPS_X > STEPSX) {
@@ -1664,11 +1664,11 @@ class MotorMovement : public Values {
       stepMotor_x(GENERAL_STEP_X, 150);
       AUX_STEPS_X -= GENERAL_STEP_X;
 
-      if (is_process_in_execution) {
-        DataWriter.create("hour");
-        printDriverXInfo("Driver 2 Info");
-        DataWriter.close();
-      }
+      // if (is_process_in_execution) {
+      //   DataWriter.create("hour");
+      //   printDriverXInfo("Driver 2 Info");
+      //   DataWriter.close();
+      // }
     }
 
     FilesObject.savePos(AUX_STEPS_X, AUX_STEPS_Y);
